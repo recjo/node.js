@@ -1,0 +1,313 @@
+﻿<!doctype html>
+<html>
+<head>
+	<title>Trivia Game</title>
+    <style>
+	body { font:13px Helvetica, Arial; margin:0px; padding:0px; background-color:#073A6C; }
+	/*  Content area  *//*orange 613817*/
+	form { background:#000; margin:0px; padding:3px; position:fixed; bottom:0px; width:100%; }
+	form input { border:0; margin:0px; padding:2px; width:90%; margin-right:.5%; }
+	form button { width:9%; background:rgb(130, 224, 255); border:none; margin:0px; padding:2px; }
+	form span { color:white; }
+	h2 { margin:0px; font-size:14px; }
+	#messages, #question { list-style-type:none; margin:0px; padding:0px; } /* clear:both;*/
+	#messages { height:130px; overflow-y:scroll; }
+	#messages li, #question li { margin:0px; padding:3px 10px; }
+	#messages li:nth-child(even) { background:#eee; }
+	#question { display:none; border:solid 4px #073A6C; width:300px; }
+	#pies { margin:0px; padding:0px; }
+	#pies:after { content:''; display:block; clear: both; }
+	#pies > div { border:solid 3px #ECBB21; width:125px; float:left; padding:5px; margin:2px; overflow:hidden; -moz-border-radius: 15px; -webkit-border-radius: 15px; border-radius: 15px; }
+	#pies > div > span { display:block; } /*info labels*/
+	#pies > div > div { width: 18px; height: 18px; float:left; margin: 1px; } /*pie squares*/
+	#dMsg, #dJoin { margin:0px; display:none; }
+	#btnAnswer, #btnStart, #timer { display:none; }
+	#answer { display:none; padding: 10px 10px; width:300px; float:right; }
+	#ssid { display:none; }
+	.correct { color: green; }
+	.incorrect { color: red; }
+	.round { -moz-border-radius: 15px; -webkit-border-radius: 15px; border-radius: 15px; }
+	#categories { width:170px; margin:4px 0px; float:right; font-weight:bold; }
+	#categories div span { text-align:center; width:25px; display:inline-block; margin-right:5px; -moz-border-radius:25px; -webkit-border-radius:25px; border-radius:25px; }
+	/*  template area  */
+	.maincontent { margin: 0px 20px; padding:10px; background-color:#fff; }
+    </style>
+	<script type="text/javascript" src="/socket.io/socket.io.js"></script>
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.11.1.js"></script>
+	<script type="text/javascript">
+	var thisPly = {};
+	var socket = io();
+	var seconds = 0;
+	var debug = false;
+	$(document).ready(function() {
+		$('#playerup').text('Enter game tag below and click "Join" button...');
+				
+		//sends 'chatmessage'
+		$('#btnSend').click(function() {
+			socket.emit('chatmessage', { name: socket.nickname, msg: $('#txtMsg').val() });
+			$('#txtMsg').val('');
+			return false;
+		});
+		
+		//sends 'join'
+		$('#btnJoin').click(function() {
+			tname = $('#txtName').val();
+			//set socket global variables for this user
+			socket.nickname = tname;
+			//send join request
+            socket.emit('join',  { nickname: tname, pid: socket.plyrid });
+			return false;
+		});
+		
+		//sends 'answerSubmit'
+		$('#btnAnswer').click(function() {
+			if (!$('input[name=ans]:checked').val()) {
+				alert('please choose an answer');
+				return false;
+			}
+			socket.emit('answerSubmit', $('input[name=ans]:checked').val() );
+			return false;
+		});
+		
+		//sends 'startGame'
+		$('#btnStart').click(function() {
+			$(this).hide();
+			socket.emit('startGame', null );
+			return false;
+		});
+		
+		////////////socket.emit sends to everyone
+		////////////socket.broadcast.emit sends to everyone except sender (and any newly created sockets)
+		////////////io.sockets.in sends to everyone in room
+		////////////socket.broadcast.to sends to everyone except sender
+		
+		
+		//------------------------------------------------------------------------------
+		
+		//receives 'initply'
+		socket.on('initply', function() {
+			if (sessionStorage.plyId) {
+				socket.emit('getInfo', sessionStorage.plyId); //this results in server emitting infoRequestResults
+				//setDisplay() will be called by infoRequestResults event handler
+			}
+			else {
+				socket.plyrid = generateUUID();
+				sessionStorage.plyId = socket.plyrid;
+				setDisplay();
+			}
+		});
+		
+		//receives 'infoRequestResults'
+		socket.on('infoRequestResults', function(ply) {
+			if (ply) {
+				socket.plyrid = ply.id;
+				socket.nickname = ply.name;
+				setDisplay();
+				//now that socket.plyrid is set, request re-display
+				socket.emit('redisplay', null);
+			}
+		});
+		
+		//receives 'piedisplay'
+		socket.on('piedisplay', function(plys) {
+			if (plys) {
+				$('#pies').empty();
+				$.each(plys, function(index, value) {
+					$('#pies').append($('<div>'));
+					$('#pies > div').eq(index).append($('<h2>').text('Player ' + value.pnum));
+					$('#pies > div').eq(index).append($('<span>').text(value.name));
+					if (value.pie1)
+						$('#pies > div').eq(index).append($('<div>').css('background-color', value.pie1color));
+					if (value.pie2)
+						$('#pies > div').eq(index).append($('<div>').css('background-color', value.pie2color));
+					if (value.pie3)
+						$('#pies > div').eq(index).append($('<div>').css('background-color', value.pie3color));
+					if (value.pie4)
+						$('#pies > div').eq(index).append($('<div>').css('background-color', value.pie4color));
+					if (value.pie5)
+						$('#pies > div').eq(index).append($('<div>').css('background-color', value.pie5color));
+					if (value.pie6)
+						$('#pies > div').eq(index).append($('<div>').css('background-color', value.pie6color));
+					if (debug) {
+						$('#pies > div').eq(index).append($('<span style="clear:both;">').text('isTurn:' + value.isTurn));
+						//$('#pies > div').eq(index).append($('<span>').text('pnum:' + value.pnum));
+						$('#pies > div').eq(index).append($('<span>').text('playerID:' + value.id));
+					}
+					//copy this ply obj to global variable
+					if (value.id == socket.plyrid) {
+						thisPly = plys[index];
+						$('#ssid').text(value.id);
+					}
+				});
+			}
+			setDisplay();
+		});
+		
+		//receives 'chatmessage'
+		socket.on('chatmessage', function(msgs) {
+			if (msgs) {
+				$('#messages').empty();
+				$('#messages').append($('<li>').html('<b>Messages</b>'));
+				$.each(msgs, function(index, value) {
+				  $('#messages').append($('<li>').html('<b>' + value.name + '</b> : ' + value.msg));
+				});
+				if ($('#messages > li').length < 2)
+					$('#messages').hide();
+			}
+		});
+		
+		//receives 'questiondisplay'
+		socket.on('questiondisplay', function(obj) {
+		    $('#playerup').empty();
+		    $('#question').empty();
+		    if (obj) {
+		        $('#playerup').html('Question for: <b>' + obj.questfor.toUpperCase() + '</b>');
+		        $('#question').append($('<li>').text('Category: ' + obj.category));
+		        $('#question').append($('<li>').text(obj.question));
+		        $('#question').append($('<li>').append('<input type="radio" id="a1" name="ans" value="a"><label for="a1">' + obj.answers.a + '</label>'));
+		        $('#question').append($('<li>').append('<input type="radio" id="a2" name="ans" value="b"><label for="a2">' + obj.answers.b + '</label>'));
+		        $('#question').append($('<li>').append('<input type="radio" id="a3" name="ans" value="c"><label for="a3">' + obj.answers.c + '</label>'));
+		        $('#question').append($('<li>').append('<input type="radio" id="a4" name="ans" value="d"><label for="a4">' + obj.answers.d + '</label>'));
+				$('#question').show();
+				//show Answer button only for right player
+				if (typeof thisPly.id === 'undefined' || !thisPly.isTurn) {
+					$('#btnAnswer').hide();
+					$('#timer').hide();
+				}
+				else {
+					$('#btnAnswer').show();
+					$('#timer').show();
+					seconds = 180;
+					setTimeout(countdown,1000);
+				}
+		    }
+			else {
+		        $('#playerup').text('Waiting for start of game...');
+				//show Start Game button for right player
+				if (typeof thisPly.id !== 'undefined' && thisPly.isTurn)
+					$('#btnStart').show();
+				else 
+					$('#btnStart').hide();
+			}
+			$('#question:empty').hide();
+		});
+		
+		//receives 'answerresult'
+		socket.on('answerresult', function(obj) {
+			$('#answer').empty();
+		    if (obj) {
+		        $('#answer').append($('<h2>').text('Last Result:'));
+				var msgcor = obj.guesser.toUpperCase() + (obj.answer == 'correct' ? ' answered correctly.' : ' is incorrect!');
+		        $('#answer').append($('<div class="' + obj.answer + '">').text(msgcor));
+				$('#answer').append($('<div>').html('<b>Question:</b> ' + obj.question));
+				$('#answer').append($('<div>').html('<b>Correct answer is:</b> ' + obj.correct + '.'));
+		        if (obj.answer == 'incorrect') {
+					var msg = (obj.answerText ? ' chose:</b> ' + obj.answerText : '</b> did not answer in time.');
+					$('#answer').append($('<div>').html('<b>' + obj.guesser.toUpperCase() + msg));
+				}
+				$('#answer').show();
+		    }
+			$('#answer:empty').hide();
+		});
+		
+		//receives 'categorydisplay'
+		socket.on('categorydisplay', function(obj) {
+			if (obj.cats) {
+				$('#categories').empty();
+				$('#categories').append($('<h2>').text('Categories:'));
+				$.each(obj.cats, function(index, value) {
+				  //$('#categories').append($('<div>').text(value).css('background-color', obj.colors[index]));
+				  $('#categories').append($('<div>'));
+				  $('#categories > div').eq(index).append($('<span>').text(value.match(/[A-Z]/g).join('')).css('background-color', obj.colors[index]));
+				  $('#categories > div').eq(index).append(value);
+				});
+			}
+		});
+		
+		//receives 'gameover'
+		socket.on('gameover', function(wnr) {
+		    $('#playerup').empty();
+		    $('#question').empty();
+			$('#btnAnswer').hide();
+		    $('#question').html('Game over...<br />Winner is ' + wnr.name + ' with ' + wnr.numPies + ' pies.');
+		});
+		
+		//------------------------------------------------------------------------------
+		
+		$('#txtMsg').keyup(function(e) {
+			if (e.keyCode == 13)
+			    $('#btnSend').trigger('click');
+		});
+		
+		$('#txtName').keyup(function(e) {
+			if (e.keyCode == 13)
+			    $('#btnJoin').trigger('click');
+		});
+	});
+	
+	var setDisplay = function() {
+		if (socket.nickname) {
+			$('#pname').html('you are: <b>' + socket.nickname + '</b>');
+			$('#dMsg').show();
+			$('#dJoin').hide();
+		}
+		else {
+			$('#dMsg').hide();
+			$('#dJoin').show();
+			$('#txtName').focus();
+		}
+	};
+	
+	var countdown = function() {
+		seconds--;
+		$('#timer').text(seconds + ' seconds');
+		if (seconds < 1) {
+			$('#timer').text('time\'s up!');
+			//io.emit submit blank answer
+			socket.emit('answerSubmit', 'z' );
+		}
+		else {
+			setTimeout(countdown,1000);
+		}
+	};
+
+	var generateUUID = function(){
+		var d = new Date().getTime();
+		var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+			var r = (d + Math.random()*16)%16 | 0;
+			d = Math.floor(d/16);
+			return (c=='x' ? r : (r&0x3|0x8)).toString(16);
+		});
+		return uuid;
+	};
+	</script>
+</head>
+<body>
+	<div style="text-align:center;">
+		<img src="/images/triviagame.png" width="400" border="0"/>
+	</div>
+	<div class="maincontent">
+		<div id="pname" style="border:solid 1px red;"></div>
+		<div id="ssid" style="border:solid 1px red;"></div>
+		<div id="categories" style="border:solid 1px red;"></div>
+		<div id="pies" style="border:solid 1px red;"></div>
+		<div id="answer" style="border:solid 1px red;"></div>
+		<div id="playerup" style="border:solid 1px red;"></div>
+		<div id="timer" style="border:solid 1px red;"></div>
+		<ul id="question" style="border:solid 1px red;"></ul>
+		<button id="btnAnswer" type="button">Answer</button>
+		<button id="btnStart" type="button">Start</button>
+		<ul id="messages" style="border:solid 1px red;"></ul>
+	</div>
+	<form>
+		<div id="dMsg">
+			<span>Enter a message and click Send.</span>
+			<input id="txtMsg" autocomplete="off" /><button id="btnSend" type="button">Send</button>
+		</div>
+		<div id="dJoin">
+			<span>Enter a name if you would like to join.</span>
+			<input id="txtName" autocomplete="off" /><button id="btnJoin" type="button">Join</button>
+		</div>
+	</form>
+</body>
+</html>

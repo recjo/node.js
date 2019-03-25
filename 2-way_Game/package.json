@@ -1,0 +1,14 @@
+{
+  "name": "NodeTS",
+  "version": "0.0.0",
+  "description": "NodeTS",
+  "main": "server.js",
+  "author": {
+    "name": "joel",
+    "email": ""
+  },
+  "dependencies": {
+    "express": "^4.10.4",
+    "socket.io": "^1.2.1"
+  }
+}

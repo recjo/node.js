@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+	<title>add</title>
+    <style>
+	body { font:12px Helvetica, Arial; margin:0px; padding:0px; }
+	input[type=text] { width:450px; }
+	#txtQuestion { width:433px; }
+	input[name=category] { margin-left:15px; }
+	#dSettings { display: none; margin: 10px; }
+    </style>
+	<script type="text/javascript" src="/socket.io/socket.io.js"></script>
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.11.1.js"></script>
+	<script type="text/javascript">
+	var socket = io();
+	$(document).ready(function() {
+		//http://localhost:1337/add
+		//TODO: write init file with "[]" if not exist
+		//TODO: make cat names, and file name customizable (for different card sets)
+		
+		//send request to get JSON source files (receives sourcefilesresponse event)
+		socket.emit('getsourcefiles', null );
+		
+		//sends 'addquestion'
+		$('#btnAdd').click(function() {
+			$('#msg').text('');
+			if (!$('input[name=correct]:checked').val()) {
+				alert('please choose correct answer');
+				return false;
+			}
+			else if (!$('input[name=category]:checked').val()) {
+				alert('please choose category');
+				return false;
+			}
+			var answer = {};
+			answer.a = $('#txtAnswerA').val();
+			answer.b = $('#txtAnswerB').val();
+			answer.c = $('#txtAnswerC').val();
+			answer.d = $('#txtAnswerD').val();
+			var question = {};
+			question.category = $('input[name=category]:checked').val();
+			question.question = $('#txtQuestion').val();
+			question.answers = answer;
+			question.correct = $('input[name=correct]:checked').val();
+			socket.emit('addquestion', question );
+			return false;
+		});
+		
+		//sends 'setsourcefile'
+		$('#btnSet').click(function() {
+			if ($('#ddlSource').val() == "") {
+				alert('please choose source file');
+				return false;
+			}
+			socket.emit('setsourcefile', $('#ddlSource').val() );
+			$('#dSettings').hide();
+			$('#ddlSource option')[0].selected = true;
+		});
+		
+		$('input[name=category]').click(function() {
+			$('#txtQuestion').focus();
+		});
+		
+		//receives 'addresponse'
+		socket.on('addresponse', function(obj) {
+			if (obj.success)
+				$('#msg').text('answer added.').css('color','green');
+			else
+				$('#msg').text('add failed.').css('color','red');
+			$('#txtQuestion').val('');
+			$('#txtAnswerA').val('');
+			$('#txtAnswerB').val('');
+			$('#txtAnswerC').val('');
+			$('#txtAnswerD').val('');
+			$('#ansA').removeAttr('checked');
+			$('#ansB').removeAttr('checked');
+			$('#ansC').removeAttr('checked');
+			$('#ansD').removeAttr('checked');
+			$('#cat1').removeAttr('checked');
+			$('#cat2').removeAttr('checked');
+			$('#cat3').removeAttr('checked');
+			$('#cat4').removeAttr('checked');
+			$('#cat5').removeAttr('checked');
+			$('#cat6').removeAttr('checked');
+		});
+		
+		//receives 'sourcefilesresponse'
+		socket.on('sourcefilesresponse', function(obj) {
+			if (obj.files) {
+				var arr = obj.files.split(',');
+				$.each(arr, function(n, val) {
+					$('#ddlSource').append($("<option></option>").attr("value", val).text(val));
+				});
+			}
+		});
+	});
+	</script>
+</head>
+<body>
+	<p><a href="javascript:void(0);" onclick="$('#dSettings').toggle();">Settings</a></p>
+	<div id="dSettings" class="room">
+		Set source file: 
+		<select id="ddlSource" size="1"><option></option></select>
+		<button id="btnSet" type="button">Set</button>
+	</div>
+	<form>
+			<span>Category:</span><br>
+			<input type="radio" id="cat1" name="category" value="Geography" /><label for="cat1">Geography</label><br>
+			<input type="radio" id="cat2" name="category" value="Entertainment" /><label for="cat2">Entertainment</label><br>
+			<input type="radio" id="cat3" name="category" value="History" /><label for="cat3">History</label><br>
+			<input type="radio" id="cat4" name="category" value="Arts and Literature" /><label for="cat4">Arts and Literature</label><br>
+			<input type="radio" id="cat5" name="category" value="Science and Nature" /><label for="cat5">Science and Nature</label><br>
+			<input type="radio" id="cat6" name="category" value="Sports and Leisure" /><label for="cat6">Sports and Leisure</label><br>
+			<span>Question:</span>
+			<input type="text" id="txtQuestion" autocomplete="off" /><br/>
+			<input type="radio" id="ansA" name="correct" value="a" />
+			<label for="ansA"><span>A:</span></label>
+			<input type="text" id="txtAnswerA" autocomplete="off" /><br/>
+			<input type="radio" id="ansB" name="correct" value="b" />
+			<label for="ansB"><span>B:</span></label>
+			<input type="text" id="txtAnswerB" autocomplete="off" /><br/>
+			<input type="radio" id="ansC" name="correct" value="c" />
+			<label for="ansC"><span>C:</span></label>
+			<input type="text" id="txtAnswerC" autocomplete="off" /><br/>
+			<input type="radio" id="ansD" name="correct" value="d" />
+			<label for="ansD"><span>D:</span></label>
+			<input type="text" id="txtAnswerD" autocomplete="off" /><br/>
+			<br />
+			<button id="btnAdd" type="button">Add</button>
+	</form>
+	<div id="msg"></div>
+</body>
+</html>
